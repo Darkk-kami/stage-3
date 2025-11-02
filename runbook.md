@@ -154,7 +154,7 @@ To suppress alerts during planned maintenance:
 3. Test the alert system:
     ```
     bash
-    bash tests/alert_test.sh
+    bash tests/test_all_alert.sh
     ```
 4. Verify alerts in your Slack channel
 
