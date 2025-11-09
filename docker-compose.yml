@@ -37,7 +37,6 @@ services:
       - GREEN_SERVICE_HOST=app_green
       - APP_PORT=${PORT}
     volumes:
-      - ./nginx/docker-entrypoint.sh:/docker-entrypoint.sh:ro
       - nginx_logs:/var/log/nginx
     command: >
       sh -c "
