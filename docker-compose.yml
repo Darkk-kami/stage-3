@@ -40,24 +40,27 @@ services:
       - nginx_logs:/var/log/nginx
       - ./nginx/nginx.conf.template:/etc/nginx/nginx.conf.template:ro
     command: >
-        sh -c "
-          mkdir -p /var/log/nginx &&
-          touch /var/log/nginx/access.log /var/log/nginx/error.log &&
-          chmod 644 /var/log/nginx/*.log &&
-          if [ \"$$ACTIVE_POOL\" = 'green' ]; then
-            PRIMARY_HOST=$$GREEN_SERVICE_HOST;
-            BACKUP_HOST=$$BLUE_SERVICE_HOST;
-          else
-            PRIMARY_HOST=$$BLUE_SERVICE_HOST;
-            BACKUP_HOST=$$GREEN_SERVICE_HOST;
-          fi &&
-          sed -e \"s/\$${PRIMARY_HOST}/$$PRIMARY_HOST/g\" \
-              -e \"s/\$${BACKUP_HOST}/$$BACKUP_HOST/g\" \
-              -e \"s/\$${APP_PORT}/$$APP_PORT/g\" \
-              -e \"s/\$${ACTIVE_POOL}/$$ACTIVE_POOL/g\" \
-              /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf &&
-          nginx -g 'daemon off;'
-        "
+      sh -c "
+        mkdir -p /var/log/nginx &&
+        touch /var/log/nginx/access.log /var/log/nginx/error.log &&
+        chmod 644 /var/log/nginx/*.log &&
+        if [ \"$$ACTIVE_POOL\" = 'green' ]; then
+          export PRIMARY_HOST=$$GREEN_SERVICE_HOST;
+          export BACKUP_HOST=$$BLUE_SERVICE_HOST;
+        else
+          export PRIMARY_HOST=$$BLUE_SERVICE_HOST;
+          export BACKUP_HOST=$$GREEN_SERVICE_HOST;
+        fi &&
+        cat /etc/nginx/nginx.conf.template | 
+        sed 's|\\\$${PRIMARY_HOST}|'\"$$PRIMARY_HOST\"'|g' |
+        sed 's|\\\$${BACKUP_HOST}|'\"$$BACKUP_HOST\"'|g' |
+        sed 's|\\\$${APP_PORT}|'\"$$APP_PORT\"'|g' |
+        sed 's|\\\$${ACTIVE_POOL}|'\"$$ACTIVE_POOL\"'|g' > /etc/nginx/nginx.conf &&
+        echo '=== Generated nginx.conf ===' &&
+        cat /etc/nginx/nginx.conf &&
+        echo '=== Starting nginx ===' &&
+        nginx -g 'daemon off;'
+      "
     restart: unless-stopped
 
   alert_watcher:
