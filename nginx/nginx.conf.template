@@ -1,0 +1,92 @@
+# ============================================
+# Nginx Configuration Template for Blue/Green
+# Fully expanded version from original entrypoint.sh
+# ============================================
+
+user  nginx;
+worker_processes  auto;
+
+error_log  /var/log/nginx/error.log warn;
+pid        /var/run/nginx.pid;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    # -------------------------------------------------
+    # Enhanced observability log format (same as before)
+    # -------------------------------------------------
+    log_format extended '[$time_local] $remote_addr "$request" $status '
+                        'pool="$upstream_http_x_app_pool" '
+                        'release="$upstream_http_x_release_id" '
+                        'upstream_status=$upstream_status '
+                        'upstream_addr=$upstream_addr '
+                        'request_time=$request_time '
+                        'upstream_response_time=$upstream_response_time '
+                        'bytes_sent=$bytes_sent';
+
+    access_log  /var/log/nginx/access.log extended;
+
+    sendfile        on;
+    keepalive_timeout  65;
+
+    # -------------------------------------------------
+    # Dynamic Blue/Green Upstream Definition
+    # (These values are substituted at container start)
+    # -------------------------------------------------
+    # ACTIVE_POOL: ${ACTIVE_POOL}
+    upstream backend_upstream {
+        server ${PRIMARY_HOST}:${APP_PORT} max_fails=20 fail_timeout=30s;
+        server ${BACKUP_HOST}:${APP_PORT} backup;
+    }
+
+    # -------------------------------------------------
+    # Application Server Block
+    # -------------------------------------------------
+    server {
+        listen 8080;
+        server_name _;
+
+        # Tight connection and read timeouts
+        proxy_connect_timeout 3s;
+        proxy_send_timeout 10s;
+        proxy_read_timeout 10s;
+
+        # Retry logic for upstream failover
+        proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
+        proxy_next_upstream_tries 1;
+        proxy_next_upstream_timeout 15s;
+
+        # -------------------------------------------------
+        # Main location proxy configuration
+        # -------------------------------------------------
+        location / {
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Pass through these custom headers from the app
+            proxy_pass_header X-App-Pool;
+            proxy_pass_header X-Release-Id;
+
+            # Remove Connection header (avoid reuse issues)
+            proxy_set_header Connection "";
+
+            proxy_pass http://backend_upstream;
+        }
+
+        # -------------------------------------------------
+        # Internal Health Check Endpoint
+        # -------------------------------------------------
+        location = /_nginx_health {
+            access_log off;
+            return 200 "ok\n";
+            add_header Content-Type text/plain;
+        }
+    }
+}
