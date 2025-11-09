@@ -38,6 +38,7 @@ services:
       - APP_PORT=${PORT}
     volumes:
       - nginx_logs:/var/log/nginx
+      - ./nginx/nginx.conf.template:/etc/nginx/nginx.conf.template:ro
     command: >
       sh -c "
         mkdir -p /var/log/nginx &&
